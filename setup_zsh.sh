@@ -10,35 +10,101 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}    Zsh + Oh My Zsh 自动配置脚本${NC}"
 echo -e "${GREEN}========================================${NC}"
 
+# 清理函数
+cleanup_old_files() {
+    echo -e "${YELLOW}清理旧文件...${NC}"
+    # 清理可能的临时文件
+    rm -rf /tmp/zsh-*
+    rm -rf ~/zsh-build-temp
+    # 清理失败的安装残留
+    rm -rf ~/.oh-my-zsh.bak.*
+    rm -rf ~/.zshrc.pre-oh-my-zsh*
+}
+
+# 检查并安装 zsh
+install_zsh_from_source() {
+    echo -e "${GREEN}开始源码编译安装 zsh...${NC}"
+    
+    # 创建临时编译目录
+    BUILD_DIR=~/zsh-build-temp
+    mkdir -p $BUILD_DIR
+    cd $BUILD_DIR
+    
+    # 下载 zsh 源码
+    echo "下载 zsh 源码..."
+    ZSH_VERSION="5.9"
+    wget -O zsh.tar.xz "https://sourceforge.net/projects/zsh/files/zsh/${ZSH_VERSION}/zsh-${ZSH_VERSION}.tar.xz/download" || \
+    curl -L -o zsh.tar.xz "https://sourceforge.net/projects/zsh/files/zsh/${ZSH_VERSION}/zsh-${ZSH_VERSION}.tar.xz/download"
+    
+    if [ ! -f zsh.tar.xz ]; then
+        echo -e "${RED}下载 zsh 源码失败${NC}"
+        return 1
+    fi
+    
+    # 解压
+    tar -xf zsh.tar.xz
+    cd zsh-${ZSH_VERSION}
+    
+    # 配置和编译
+    echo "配置编译选项..."
+    ./configure --prefix=$HOME/.local --enable-shared
+    
+    echo "编译中（可能需要几分钟）..."
+    make -j$(nproc)
+    
+    echo "安装到 ~/.local ..."
+    make install
+    
+    # 添加到 PATH
+    if ! grep -q "$HOME/.local/bin" ~/.bashrc; then
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+    fi
+    export PATH="$HOME/.local/bin:$PATH"
+    
+    # 清理编译目录
+    cd ~
+    rm -rf $BUILD_DIR
+    
+    echo -e "${GREEN}zsh 安装完成${NC}"
+    return 0
+}
+
+# 清理旧文件
+cleanup_old_files
+
 # 检查 zsh 是否已安装
 if ! command -v zsh &> /dev/null; then
-    echo -e "${RED}错误: zsh 未安装，请先安装 zsh${NC}"
-    echo "Ubuntu/Debian: sudo apt install zsh"
-    echo "CentOS/RHEL: sudo yum install zsh"
-    exit 1
+    echo -e "${YELLOW}zsh 未安装，尝试从源码编译安装...${NC}"
+    if ! install_zsh_from_source; then
+        echo -e "${RED}zsh 安装失败，请手动安装${NC}"
+        exit 1
+    fi
 fi
 
 # 检查 git 是否已安装
 if ! command -v git &> /dev/null; then
-    echo -e "${RED}错误: git 未安装，请先安装 git${NC}"
+    echo -e "${RED}错误: git 未安装${NC}"
+    echo "尝试使用源码安装 git:"
+    echo "wget https://github.com/git/git/archive/v2.40.0.tar.gz"
     exit 1
 fi
 
 # 备份现有配置
 if [ -f ~/.zshrc ]; then
-    echo -e "${YELLOW}备份现有 .zshrc 到 .zshrc.backup${NC}"
+    echo -e "${YELLOW}备份现有 .zshrc${NC}"
     cp ~/.zshrc ~/.zshrc.backup.$(date +%Y%m%d_%H%M%S)
 fi
 
 if [ -f ~/.p10k.zsh ]; then
-    echo -e "${YELLOW}备份现有 .p10k.zsh 到 .p10k.zsh.backup${NC}"
+    echo -e "${YELLOW}备份现有 .p10k.zsh${NC}"
     cp ~/.p10k.zsh ~/.p10k.zsh.backup.$(date +%Y%m%d_%H%M%S)
 fi
 
 # 安装 Oh My Zsh
 if [ ! -d "$HOME/.oh-my-zsh" ]; then
     echo -e "${GREEN}安装 Oh My Zsh...${NC}"
-    sh -c "$(curl -fsSL https://gh-proxy.com/https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+    # 使用 ghfast.top 代理
+    sh -c "$(curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 else
     echo -e "${YELLOW}Oh My Zsh 已安装，跳过${NC}"
 fi
@@ -47,47 +113,23 @@ fi
 echo -e "${GREEN}检查 Powerlevel10k 主题...${NC}"
 if [ ! -d "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k" ]; then
     echo "安装 Powerlevel10k..."
-    git clone --depth=1 https://gh-proxy.com/https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
+    git clone --depth=1 https://ghfast.top/https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
 else
     echo -e "${YELLOW}Powerlevel10k 主题已存在${NC}"
 fi
 
 # 下载 p10k 配置
 echo -e "${GREEN}下载 Powerlevel10k 配置...${NC}"
-P10K_URL="https://gh-proxy.com/https://raw.githubusercontent.com/VocabVictor/myzsh/main/p10k.zsh"
+P10K_URL="https://ghfast.top/https://raw.githubusercontent.com/VocabVictor/myzsh/main/p10k.zsh"
 echo "从 $P10K_URL 下载..."
 
-# 尝试使用 curl 下载
-if command -v curl &> /dev/null; then
-    curl -fsSL "$P10K_URL" -o ~/.p10k.zsh.tmp 2>/dev/null
-    if [ $? -eq 0 ] && [ -s ~/.p10k.zsh.tmp ]; then
-        mv ~/.p10k.zsh.tmp ~/.p10k.zsh
-        echo -e "${GREEN}✓ Powerlevel10k 配置下载成功 ($(wc -l < ~/.p10k.zsh) 行)${NC}"
-    else
-        echo -e "${RED}✗ curl 下载失败${NC}"
-        rm -f ~/.p10k.zsh.tmp
-    fi
-# 如果 curl 失败，尝试 wget
-elif command -v wget &> /dev/null; then
-    wget -q "$P10K_URL" -O ~/.p10k.zsh.tmp 2>/dev/null
-    if [ $? -eq 0 ] && [ -s ~/.p10k.zsh.tmp ]; then
-        mv ~/.p10k.zsh.tmp ~/.p10k.zsh
-        echo -e "${GREEN}✓ Powerlevel10k 配置下载成功 ($(wc -l < ~/.p10k.zsh) 行)${NC}"
-    else
-        echo -e "${RED}✗ wget 下载失败${NC}"
-        rm -f ~/.p10k.zsh.tmp
-    fi
+curl -fsSL "$P10K_URL" -o ~/.p10k.zsh.tmp 2>/dev/null
+if [ $? -eq 0 ] && [ -s ~/.p10k.zsh.tmp ]; then
+    mv ~/.p10k.zsh.tmp ~/.p10k.zsh
+    echo -e "${GREEN}✓ Powerlevel10k 配置下载成功${NC}"
 else
-    echo -e "${RED}✗ 没有找到 curl 或 wget${NC}"
-fi
-
-# 验证 p10k.zsh 是否存在
-if [ ! -f ~/.p10k.zsh ]; then
-    echo -e "${YELLOW}警告: p10k.zsh 文件不存在${NC}"
-    echo -e "${YELLOW}Powerlevel10k 将使用默认配置${NC}"
-    echo -e "${YELLOW}你可以稍后手动下载配置：${NC}"
-    echo "curl -fsSL $P10K_URL -o ~/.p10k.zsh"
-    echo "或运行 'p10k configure' 重新配置"
+    echo -e "${YELLOW}P10k 配置下载失败，将使用默认配置${NC}"
+    rm -f ~/.p10k.zsh.tmp
 fi
 
 # 安装插件
@@ -95,32 +137,28 @@ echo -e "${GREEN}安装常用插件...${NC}"
 
 # zsh-autosuggestions
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions" ]; then
-    echo "安装 zsh-autosuggestions..."
-    git clone https://gh-proxy.com/https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
+    git clone https://ghfast.top/https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
 else
     echo -e "${YELLOW}zsh-autosuggestions 已存在${NC}"
 fi
 
 # zsh-syntax-highlighting
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting" ]; then
-    echo "安装 zsh-syntax-highlighting..."
-    git clone https://gh-proxy.com/https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
+    git clone https://ghfast.top/https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
 else
     echo -e "${YELLOW}zsh-syntax-highlighting 已存在${NC}"
 fi
 
 # zsh-completions
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-completions" ]; then
-    echo "安装 zsh-completions..."
-    git clone https://gh-proxy.com/https://github.com/zsh-users/zsh-completions ${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions
+    git clone https://ghfast.top/https://github.com/zsh-users/zsh-completions ${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions
 else
     echo -e "${YELLOW}zsh-completions 已存在${NC}"
 fi
 
-# zsh-z (快速跳转)
+# zsh-z
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-z" ]; then
-    echo "安装 zsh-z..."
-    git clone https://gh-proxy.com/https://github.com/agkozak/zsh-z ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-z
+    git clone https://ghfast.top/https://github.com/agkozak/zsh-z ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-z
 else
     echo -e "${YELLOW}zsh-z 已存在${NC}"
 fi
@@ -136,15 +174,15 @@ fi
 # Path to oh-my-zsh
 export ZSH="$HOME/.oh-my-zsh"
 
+# 添加本地安装的 zsh 到 PATH
+export PATH="$HOME/.local/bin:$PATH"
+
 # 主题设置
 ZSH_THEME="powerlevel10k/powerlevel10k"
 
 # 插件配置
 plugins=(
     git
-    docker
-    docker-compose
-    kubectl
     zsh-autosuggestions
     zsh-syntax-highlighting
     zsh-completions
@@ -152,7 +190,6 @@ plugins=(
     extract
     sudo
     colored-man-pages
-    command-not-found
     history-substring-search
 )
 
@@ -173,12 +210,10 @@ setopt HIST_IGNORE_DUPS
 setopt HIST_IGNORE_SPACE
 setopt HIST_VERIFY
 setopt SHARE_HISTORY
-setopt HIST_FIND_NO_DUPS
 
 # 自动建议配置
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=244"
 ZSH_AUTOSUGGEST_STRATEGY=(history completion)
-ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE=20
 
 # 别名设置
 alias ll='ls -alF'
@@ -206,8 +241,6 @@ alias free='free -h'
 alias grep='grep --color=auto'
 alias cls='clear'
 alias h='history'
-alias path='echo -e ${PATH//:/\\n}'
-alias ports='netstat -tulanp'
 
 # 实用函数
 mkcd() { mkdir -p "$1" && cd "$1"; }
@@ -233,24 +266,18 @@ extract() {
     fi
 }
 
-# 查找文件
-ff() { find . -type f -name "*$1*" ; }
-fd() { find . -type d -name "*$1*" ; }
-
-# 自动补全
-autoload -U compinit && compinit
-zstyle ':completion:*' menu select
-zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
-
 # 键绑定
 bindkey '^[[A' history-substring-search-up
 bindkey '^[[B' history-substring-search-down
-bindkey '^[[H' beginning-of-line
-bindkey '^[[F' end-of-line
 
 # 加载 p10k 配置
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 EOF
+
+# 清理临时文件
+echo -e "${GREEN}清理临时文件...${NC}"
+rm -f ~/.zshrc.pre-oh-my-zsh*
+rm -f ~/.p10k.zsh.tmp
 
 # 最终验证
 echo -e "${GREEN}========================================${NC}"
@@ -262,16 +289,19 @@ echo -e "${GREEN}安装摘要：${NC}"
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${YELLOW}配置完成！${NC}"
-echo -e "${GREEN}注意：Powerlevel10k 需要特殊字体支持${NC}"
-echo -e "${GREEN}推荐在本地安装 MesloLGS NF 字体${NC}"
-echo -e "${GREEN}Windows: https://github.com/romkatv/powerlevel10k#fonts${NC}"
-echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}请运行以下命令设置 zsh 为默认 shell:${NC}"
-echo -e "${GREEN}  chsh -s \$(which zsh)${NC}"
-echo -e "${GREEN}然后重新登录或运行: exec zsh${NC}"
-echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN}zsh 路径: $(which zsh)${NC}"
+echo -e "${YELLOW}========================================${NC}"
 
-# 询问是否立即切换到 zsh
+# 设置默认 shell（无需 sudo）
+echo -e "${GREEN}将 zsh 添加到 ~/.bashrc 以自动启动${NC}"
+if ! grep -q "exec zsh" ~/.bashrc; then
+    echo '[ -x "$(command -v zsh)" ] && exec zsh' >> ~/.bashrc
+fi
+
+echo -e "${GREEN}下次登录时将自动进入 zsh${NC}"
+echo -e "${GREEN}或现在运行: exec zsh${NC}"
+
+# 询问是否立即切换
 read -p "是否现在切换到 zsh? (y/n): " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
