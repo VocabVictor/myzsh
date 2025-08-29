@@ -14,14 +14,46 @@ echo -e "${GREEN}========================================${NC}"
 cleanup_old_files() {
     echo -e "${YELLOW}清理旧文件...${NC}"
     rm -rf /tmp/zsh-*
+    rm -rf /tmp/ncurses-*
     rm -rf ~/.oh-my-zsh.bak.*
     rm -rf ~/.zshrc.pre-oh-my-zsh*
     rm -f ~/.p10k.zsh.tmp
 }
 
+# 安装 ncurses (zsh 的依赖)
+install_ncurses() {
+    echo -e "${GREEN}安装 ncurses 库...${NC}"
+    cd /tmp
+    
+    # 下载 ncurses
+    wget https://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.3.tar.gz || \
+    curl -O https://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.3.tar.gz
+    
+    tar -xf ncurses-6.3.tar.gz
+    cd ncurses-6.3
+    
+    # 配置和编译
+    ./configure --prefix=$HOME/.local --with-shared --enable-widec
+    make -j$(nproc)
+    make install
+    
+    # 设置环境变量
+    export CPPFLAGS="-I$HOME/.local/include"
+    export LDFLAGS="-L$HOME/.local/lib"
+    export LD_LIBRARY_PATH="$HOME/.local/lib:$LD_LIBRARY_PATH"
+    
+    cd /tmp
+    rm -rf ncurses*
+    
+    echo -e "${GREEN}ncurses 安装完成${NC}"
+}
+
 # 源码编译安装 zsh
 install_zsh_from_source() {
     echo -e "${GREEN}开始源码编译安装 zsh...${NC}"
+    
+    # 先安装依赖
+    install_ncurses
     
     cd /tmp
     
@@ -29,7 +61,6 @@ install_zsh_from_source() {
     ZSH_VERSION="5.9"
     echo "下载 zsh 源码..."
     
-    # 使用 ghfast.top 代理下载
     curl -L "https://ghfast.top/https://github.com/zsh-users/zsh/archive/refs/tags/zsh-${ZSH_VERSION}.tar.gz" -o zsh.tar.gz || \
     wget "https://gh-proxy.com/https://github.com/zsh-users/zsh/archive/refs/tags/zsh-${ZSH_VERSION}.tar.gz" -O zsh.tar.gz
     
@@ -42,15 +73,32 @@ install_zsh_from_source() {
     tar -xf zsh.tar.gz
     cd zsh-zsh-${ZSH_VERSION}
     
-    # 简单配置，安装到用户目录
+    # 设置编译环境变量
+    export CPPFLAGS="-I$HOME/.local/include"
+    export LDFLAGS="-L$HOME/.local/lib"
+    export LD_LIBRARY_PATH="$HOME/.local/lib:$LD_LIBRARY_PATH"
+    
+    # 配置
     ./Util/preconfig
-    ./configure --prefix=$HOME/.local
+    ./configure --prefix=$HOME/.local \
+                --enable-cap \
+                --enable-pcre \
+                --enable-multibyte \
+                --with-tcsetpgrp
+    
     make -j$(nproc)
     make install
     
-    # 添加到 PATH
+    # 添加到 PATH 和 LD_LIBRARY_PATH
     export PATH="$HOME/.local/bin:$PATH"
-    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+    
+    # 永久添加到 bashrc
+    if ! grep -q "$HOME/.local/bin" ~/.bashrc; then
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+    fi
+    if ! grep -q "LD_LIBRARY_PATH.*\.local/lib" ~/.bashrc; then
+        echo 'export LD_LIBRARY_PATH="$HOME/.local/lib:$LD_LIBRARY_PATH"' >> ~/.bashrc
+    fi
     
     # 清理
     cd /tmp
@@ -168,6 +216,7 @@ export ZSH="$HOME/.oh-my-zsh"
 
 # 添加本地安装的程序到 PATH
 export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$HOME/.local/lib:$LD_LIBRARY_PATH"
 
 # 主题设置
 ZSH_THEME="powerlevel10k/powerlevel10k"
