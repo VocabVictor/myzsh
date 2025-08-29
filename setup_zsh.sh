@@ -44,8 +44,9 @@ else
 fi
 
 # 安装 Powerlevel10k 主题
-echo -e "${GREEN}安装 Powerlevel10k 主题...${NC}"
+echo -e "${GREEN}检查 Powerlevel10k 主题...${NC}"
 if [ ! -d "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k" ]; then
+    echo "安装 Powerlevel10k..."
     git clone --depth=1 https://gh-proxy.com/https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
 else
     echo -e "${YELLOW}Powerlevel10k 主题已存在${NC}"
@@ -53,34 +54,28 @@ fi
 
 # 下载 p10k 配置
 echo -e "${GREEN}下载 Powerlevel10k 配置...${NC}"
-P10K_URL="https://gh-proxy.com/https://raw.githubusercontent.com/VocabVictor/myzsh/refs/heads/main/p10k.zsh"
+P10K_URL="https://gh-proxy.com/https://raw.githubusercontent.com/VocabVictor/myzsh/main/p10k.zsh"
 echo "从 $P10K_URL 下载..."
 
 # 尝试使用 curl 下载
 if command -v curl &> /dev/null; then
-    if curl -fsSL "$P10K_URL" -o ~/.p10k.zsh.tmp 2>/dev/null; then
-        if [ -s ~/.p10k.zsh.tmp ]; then
-            mv ~/.p10k.zsh.tmp ~/.p10k.zsh
-            echo -e "${GREEN}✓ Powerlevel10k 配置下载成功 ($(wc -l < ~/.p10k.zsh) 行)${NC}"
-        else
-            echo -e "${RED}✗ 下载的文件为空${NC}"
-            rm -f ~/.p10k.zsh.tmp
-        fi
+    curl -fsSL "$P10K_URL" -o ~/.p10k.zsh.tmp 2>/dev/null
+    if [ $? -eq 0 ] && [ -s ~/.p10k.zsh.tmp ]; then
+        mv ~/.p10k.zsh.tmp ~/.p10k.zsh
+        echo -e "${GREEN}✓ Powerlevel10k 配置下载成功 ($(wc -l < ~/.p10k.zsh) 行)${NC}"
     else
         echo -e "${RED}✗ curl 下载失败${NC}"
+        rm -f ~/.p10k.zsh.tmp
     fi
 # 如果 curl 失败，尝试 wget
 elif command -v wget &> /dev/null; then
-    if wget -q "$P10K_URL" -O ~/.p10k.zsh.tmp 2>/dev/null; then
-        if [ -s ~/.p10k.zsh.tmp ]; then
-            mv ~/.p10k.zsh.tmp ~/.p10k.zsh
-            echo -e "${GREEN}✓ Powerlevel10k 配置下载成功 ($(wc -l < ~/.p10k.zsh) 行)${NC}"
-        else
-            echo -e "${RED}✗ 下载的文件为空${NC}"
-            rm -f ~/.p10k.zsh.tmp
-        fi
+    wget -q "$P10K_URL" -O ~/.p10k.zsh.tmp 2>/dev/null
+    if [ $? -eq 0 ] && [ -s ~/.p10k.zsh.tmp ]; then
+        mv ~/.p10k.zsh.tmp ~/.p10k.zsh
+        echo -e "${GREEN}✓ Powerlevel10k 配置下载成功 ($(wc -l < ~/.p10k.zsh) 行)${NC}"
     else
         echo -e "${RED}✗ wget 下载失败${NC}"
+        rm -f ~/.p10k.zsh.tmp
     fi
 else
     echo -e "${RED}✗ 没有找到 curl 或 wget${NC}"
@@ -102,24 +97,32 @@ echo -e "${GREEN}安装常用插件...${NC}"
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions" ]; then
     echo "安装 zsh-autosuggestions..."
     git clone https://gh-proxy.com/https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
+else
+    echo -e "${YELLOW}zsh-autosuggestions 已存在${NC}"
 fi
 
 # zsh-syntax-highlighting
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting" ]; then
     echo "安装 zsh-syntax-highlighting..."
     git clone https://gh-proxy.com/https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
+else
+    echo -e "${YELLOW}zsh-syntax-highlighting 已存在${NC}"
 fi
 
 # zsh-completions
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-completions" ]; then
     echo "安装 zsh-completions..."
     git clone https://gh-proxy.com/https://github.com/zsh-users/zsh-completions ${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions
+else
+    echo -e "${YELLOW}zsh-completions 已存在${NC}"
 fi
 
 # zsh-z (快速跳转)
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-z" ]; then
     echo "安装 zsh-z..."
     git clone https://gh-proxy.com/https://github.com/agkozak/zsh-z ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-z
+else
+    echo -e "${YELLOW}zsh-z 已存在${NC}"
 fi
 
 # 创建自定义配置
