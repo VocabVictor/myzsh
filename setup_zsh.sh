@@ -164,10 +164,17 @@ if [ -f ~/.p10k.zsh ]; then
     cp ~/.p10k.zsh ~/.p10k.zsh.backup.$(date +%Y%m%d_%H%M%S)
 fi
 
-# 安装 Oh My Zsh
-if [ ! -d "$HOME/.oh-my-zsh" ]; then
+# 安装 Oh My Zsh（直接克隆，不使用官方安装脚本）
+if [ ! -d "$HOME/.oh-my-zsh" ] || [ ! -f "$HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
     echo -e "${GREEN}安装 Oh My Zsh...${NC}"
-    sh -c "$(curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+    rm -rf ~/.oh-my-zsh
+    git clone --depth=1 https://ghfast.top/https://github.com/ohmyzsh/ohmyzsh.git ~/.oh-my-zsh
+    if [ $? -eq 0 ] && [ -f "$HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
+        echo -e "${GREEN}Oh My Zsh 安装成功${NC}"
+    else
+        echo -e "${RED}Oh My Zsh 安装失败${NC}"
+        exit 1
+    fi
 else
     echo -e "${GREEN}Oh My Zsh 已安装，跳过${NC}"
 fi
@@ -336,7 +343,7 @@ cleanup_temp_files
 # 最终验证
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}安装摘要：${NC}"
-[ -d ~/.oh-my-zsh ] && echo -e "${GREEN}✓ Oh My Zsh${NC}" || echo -e "${RED}✗ Oh My Zsh${NC}"
+[ -d ~/.oh-my-zsh ] && [ -f ~/.oh-my-zsh/oh-my-zsh.sh ] && echo -e "${GREEN}✓ Oh My Zsh${NC}" || echo -e "${RED}✗ Oh My Zsh${NC}"
 [ -d ~/.oh-my-zsh/custom/themes/powerlevel10k ] && echo -e "${GREEN}✓ Powerlevel10k 主题${NC}" || echo -e "${RED}✗ Powerlevel10k 主题${NC}"
 [ -f ~/.p10k.zsh ] && echo -e "${GREEN}✓ P10k 配置文件${NC}" || echo -e "${YELLOW}! P10k 配置文件（将使用默认）${NC}"
 [ -d ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions ] && echo -e "${GREEN}✓ 插件已安装${NC}" || echo -e "${YELLOW}! 部分插件未安装${NC}"
