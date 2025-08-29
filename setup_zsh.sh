@@ -38,7 +38,7 @@ fi
 # 安装 Oh My Zsh
 if [ ! -d "$HOME/.oh-my-zsh" ]; then
     echo -e "${GREEN}安装 Oh My Zsh...${NC}"
-    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+    sh -c "$(curl -fsSL https://gh-proxy.com/https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 else
     echo -e "${YELLOW}Oh My Zsh 已安装，跳过${NC}"
 fi
@@ -46,14 +46,14 @@ fi
 # 安装 Powerlevel10k 主题
 echo -e "${GREEN}安装 Powerlevel10k 主题...${NC}"
 if [ ! -d "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k" ]; then
-    git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
+    git clone --depth=1 https://gh-proxy.com/https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
 else
     echo -e "${YELLOW}Powerlevel10k 主题已存在${NC}"
 fi
 
 # 下载 p10k 配置
 echo -e "${GREEN}下载 Powerlevel10k 配置...${NC}"
-P10K_URL="https://gitee.com/bzzm/myzsh/raw/master/p10k.zsh"
+P10K_URL="https://gh-proxy.com/https://raw.githubusercontent.com/VocabVictor/myzsh/refs/heads/main/p10k.zsh"
 echo "从 $P10K_URL 下载..."
 
 # 尝试使用 curl 下载
@@ -101,25 +101,25 @@ echo -e "${GREEN}安装常用插件...${NC}"
 # zsh-autosuggestions
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions" ]; then
     echo "安装 zsh-autosuggestions..."
-    git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
+    git clone https://gh-proxy.com/https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
 fi
 
 # zsh-syntax-highlighting
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting" ]; then
     echo "安装 zsh-syntax-highlighting..."
-    git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
+    git clone https://gh-proxy.com/https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
 fi
 
 # zsh-completions
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-completions" ]; then
     echo "安装 zsh-completions..."
-    git clone https://github.com/zsh-users/zsh-completions ${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions
+    git clone https://gh-proxy.com/https://github.com/zsh-users/zsh-completions ${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions
 fi
 
 # zsh-z (快速跳转)
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-z" ]; then
     echo "安装 zsh-z..."
-    git clone https://github.com/agkozak/zsh-z ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-z
+    git clone https://gh-proxy.com/https://github.com/agkozak/zsh-z ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-z
 fi
 
 # 创建自定义配置
