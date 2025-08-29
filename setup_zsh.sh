@@ -204,21 +204,31 @@ else
     echo -e "${GREEN}P10k 配置文件已存在，跳过下载${NC}"
 fi
 
-# 安装插件函数
+# 安装插件函数（改进版）
 install_plugin() {
     local plugin_name=$1
     local plugin_repo=$2
     local plugin_dir=$3
     
-    if [ ! -d "$plugin_dir" ]; then
-        echo "安装 $plugin_name..."
-        git clone "$plugin_repo" "$plugin_dir"
+    # 检查插件是否真正存在且完整
+    if [ -d "$plugin_dir" ] && [ -n "$(ls -A $plugin_dir 2>/dev/null)" ] && [ -f "$plugin_dir"/*.plugin.zsh 2>/dev/null -o -f "$plugin_dir"/*.zsh 2>/dev/null ]; then
+        echo -e "${GREEN}$plugin_name 已安装且完整，跳过${NC}"
     else
-        echo -e "${GREEN}$plugin_name 已存在，跳过${NC}"
+        echo "安装 $plugin_name..."
+        rm -rf "$plugin_dir"  # 清理可能的空目录或损坏的安装
+        git clone --depth=1 "$plugin_repo" "$plugin_dir"
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}$plugin_name 安装成功${NC}"
+        else
+            echo -e "${RED}$plugin_name 安装失败${NC}"
+        fi
     fi
 }
 
 echo -e "${GREEN}检查并安装插件...${NC}"
+
+# 确保插件目录存在
+mkdir -p ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins
 
 # 安装各个插件
 install_plugin "zsh-autosuggestions" \
@@ -346,7 +356,13 @@ echo -e "${GREEN}安装摘要：${NC}"
 [ -d ~/.oh-my-zsh ] && [ -f ~/.oh-my-zsh/oh-my-zsh.sh ] && echo -e "${GREEN}✓ Oh My Zsh${NC}" || echo -e "${RED}✗ Oh My Zsh${NC}"
 [ -d ~/.oh-my-zsh/custom/themes/powerlevel10k ] && echo -e "${GREEN}✓ Powerlevel10k 主题${NC}" || echo -e "${RED}✗ Powerlevel10k 主题${NC}"
 [ -f ~/.p10k.zsh ] && echo -e "${GREEN}✓ P10k 配置文件${NC}" || echo -e "${YELLOW}! P10k 配置文件（将使用默认）${NC}"
-[ -d ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions ] && echo -e "${GREEN}✓ 插件已安装${NC}" || echo -e "${YELLOW}! 部分插件未安装${NC}"
+
+# 检查插件
+echo -e "${GREEN}插件状态：${NC}"
+[ -d ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions ] && echo -e "  ${GREEN}✓ zsh-autosuggestions${NC}" || echo -e "  ${RED}✗ zsh-autosuggestions${NC}"
+[ -d ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting ] && echo -e "  ${GREEN}✓ zsh-syntax-highlighting${NC}" || echo -e "  ${RED}✗ zsh-syntax-highlighting${NC}"
+[ -d ~/.oh-my-zsh/custom/plugins/zsh-completions ] && echo -e "  ${GREEN}✓ zsh-completions${NC}" || echo -e "  ${RED}✗ zsh-completions${NC}"
+[ -d ~/.oh-my-zsh/custom/plugins/zsh-z ] && echo -e "  ${GREEN}✓ zsh-z${NC}" || echo -e "  ${RED}✗ zsh-z${NC}"
 
 # 显示 zsh 路径
 if [ -f "$HOME/.local/bin/zsh" ]; then
