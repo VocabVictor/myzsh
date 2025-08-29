@@ -13,57 +13,48 @@ echo -e "${GREEN}========================================${NC}"
 # 清理函数
 cleanup_old_files() {
     echo -e "${YELLOW}清理旧文件...${NC}"
-    # 清理可能的临时文件
     rm -rf /tmp/zsh-*
-    rm -rf ~/zsh-build-temp
-    # 清理失败的安装残留
     rm -rf ~/.oh-my-zsh.bak.*
     rm -rf ~/.zshrc.pre-oh-my-zsh*
+    rm -f ~/.p10k.zsh.tmp
 }
 
-# 检查并安装 zsh
+# 源码编译安装 zsh
 install_zsh_from_source() {
     echo -e "${GREEN}开始源码编译安装 zsh...${NC}"
     
-    # 创建临时编译目录
-    BUILD_DIR=~/zsh-build-temp
-    mkdir -p $BUILD_DIR
-    cd $BUILD_DIR
+    cd /tmp
     
-    # 下载 zsh 源码
-    echo "下载 zsh 源码..."
+    # 使用 GitHub 代理下载源码
     ZSH_VERSION="5.9"
-    wget -O zsh.tar.xz "https://sourceforge.net/projects/zsh/files/zsh/${ZSH_VERSION}/zsh-${ZSH_VERSION}.tar.xz/download" || \
-    curl -L -o zsh.tar.xz "https://sourceforge.net/projects/zsh/files/zsh/${ZSH_VERSION}/zsh-${ZSH_VERSION}.tar.xz/download"
+    echo "下载 zsh 源码..."
     
-    if [ ! -f zsh.tar.xz ]; then
-        echo -e "${RED}下载 zsh 源码失败${NC}"
+    # 使用 ghfast.top 代理下载
+    curl -L "https://ghfast.top/https://github.com/zsh-users/zsh/archive/refs/tags/zsh-${ZSH_VERSION}.tar.gz" -o zsh.tar.gz || \
+    wget "https://gh-proxy.com/https://github.com/zsh-users/zsh/archive/refs/tags/zsh-${ZSH_VERSION}.tar.gz" -O zsh.tar.gz
+    
+    if [ ! -f zsh.tar.gz ]; then
+        echo -e "${RED}下载失败${NC}"
         return 1
     fi
     
-    # 解压
-    tar -xf zsh.tar.xz
-    cd zsh-${ZSH_VERSION}
+    # 解压编译
+    tar -xf zsh.tar.gz
+    cd zsh-zsh-${ZSH_VERSION}
     
-    # 配置和编译
-    echo "配置编译选项..."
-    ./configure --prefix=$HOME/.local --enable-shared
-    
-    echo "编译中（可能需要几分钟）..."
+    # 简单配置，安装到用户目录
+    ./Util/preconfig
+    ./configure --prefix=$HOME/.local
     make -j$(nproc)
-    
-    echo "安装到 ~/.local ..."
     make install
     
     # 添加到 PATH
-    if ! grep -q "$HOME/.local/bin" ~/.bashrc; then
-        echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-    fi
     export PATH="$HOME/.local/bin:$PATH"
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
     
-    # 清理编译目录
-    cd ~
-    rm -rf $BUILD_DIR
+    # 清理
+    cd /tmp
+    rm -rf zsh*
     
     echo -e "${GREEN}zsh 安装完成${NC}"
     return 0
@@ -83,9 +74,7 @@ fi
 
 # 检查 git 是否已安装
 if ! command -v git &> /dev/null; then
-    echo -e "${RED}错误: git 未安装${NC}"
-    echo "尝试使用源码安装 git:"
-    echo "wget https://github.com/git/git/archive/v2.40.0.tar.gz"
+    echo -e "${RED}错误: git 未安装，请先安装 git${NC}"
     exit 1
 fi
 
@@ -103,7 +92,6 @@ fi
 # 安装 Oh My Zsh
 if [ ! -d "$HOME/.oh-my-zsh" ]; then
     echo -e "${GREEN}安装 Oh My Zsh...${NC}"
-    # 使用 ghfast.top 代理
     sh -c "$(curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 else
     echo -e "${YELLOW}Oh My Zsh 已安装，跳过${NC}"
@@ -137,6 +125,7 @@ echo -e "${GREEN}安装常用插件...${NC}"
 
 # zsh-autosuggestions
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions" ]; then
+    echo "安装 zsh-autosuggestions..."
     git clone https://ghfast.top/https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
 else
     echo -e "${YELLOW}zsh-autosuggestions 已存在${NC}"
@@ -144,6 +133,7 @@ fi
 
 # zsh-syntax-highlighting
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting" ]; then
+    echo "安装 zsh-syntax-highlighting..."
     git clone https://ghfast.top/https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
 else
     echo -e "${YELLOW}zsh-syntax-highlighting 已存在${NC}"
@@ -151,6 +141,7 @@ fi
 
 # zsh-completions
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-completions" ]; then
+    echo "安装 zsh-completions..."
     git clone https://ghfast.top/https://github.com/zsh-users/zsh-completions ${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions
 else
     echo -e "${YELLOW}zsh-completions 已存在${NC}"
@@ -158,6 +149,7 @@ fi
 
 # zsh-z
 if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-z" ]; then
+    echo "安装 zsh-z..."
     git clone https://ghfast.top/https://github.com/agkozak/zsh-z ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-z
 else
     echo -e "${YELLOW}zsh-z 已存在${NC}"
@@ -174,8 +166,8 @@ fi
 # Path to oh-my-zsh
 export ZSH="$HOME/.oh-my-zsh"
 
-# 添加本地安装的 zsh 到 PATH
-export PATH="$HOME/.local/bin:$PATH"
+# 添加本地安装的程序到 PATH
+export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
 
 # 主题设置
 ZSH_THEME="powerlevel10k/powerlevel10k"
@@ -198,7 +190,6 @@ source $ZSH/oh-my-zsh.sh
 # 用户配置
 export LANG=en_US.UTF-8
 export EDITOR='vim'
-export PATH=$HOME/bin:$HOME/.local/bin:$PATH
 
 # 历史记录优化
 HISTSIZE=100000
@@ -210,10 +201,12 @@ setopt HIST_IGNORE_DUPS
 setopt HIST_IGNORE_SPACE
 setopt HIST_VERIFY
 setopt SHARE_HISTORY
+setopt HIST_FIND_NO_DUPS
 
 # 自动建议配置
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=244"
 ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE=20
 
 # 别名设置
 alias ll='ls -alF'
@@ -241,6 +234,7 @@ alias free='free -h'
 alias grep='grep --color=auto'
 alias cls='clear'
 alias h='history'
+alias path='echo -e ${PATH//:/\\n}'
 
 # 实用函数
 mkcd() { mkdir -p "$1" && cd "$1"; }
@@ -266,18 +260,24 @@ extract() {
     fi
 }
 
+# 查找文件
+ff() { find . -type f -name "*$1*" ; }
+fd() { find . -type d -name "*$1*" ; }
+
+# 自动补全
+autoload -U compinit && compinit
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
+
 # 键绑定
 bindkey '^[[A' history-substring-search-up
 bindkey '^[[B' history-substring-search-down
+bindkey '^[[H' beginning-of-line
+bindkey '^[[F' end-of-line
 
 # 加载 p10k 配置
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 EOF
-
-# 清理临时文件
-echo -e "${GREEN}清理临时文件...${NC}"
-rm -f ~/.zshrc.pre-oh-my-zsh*
-rm -f ~/.p10k.zsh.tmp
 
 # 最终验证
 echo -e "${GREEN}========================================${NC}"
