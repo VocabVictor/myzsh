@@ -283,6 +283,7 @@ source $ZSH/oh-my-zsh.sh
 # 用户配置
 export LANG=en_US.UTF-8
 export EDITOR='vim'
+export TZ='Asia/Shanghai'
 
 # 历史记录优化
 HISTSIZE=100000
