@@ -32,50 +32,10 @@ cleanup_temp_files
 # 错误处理
 trap cleanup_temp_files EXIT
 
-# 检测代理设置
-GITHUB_URLS=()
+# 检测代理
 if [ -n "$http_proxy" ] || [ -n "$https_proxy" ]; then
-    echo -e "${GREEN}检测到代理设置，将使用代理下载${NC}"
-    GITHUB_URLS+=("https://github.com")
-else
-    echo -e "${YELLOW}未检测到代理，将尝试多个镜像源${NC}"
-    # 添加多个GitHub镜像
-    GITHUB_URLS+=(
-        "https://mirror.ghproxy.com/https://github.com"
-        "https://ghproxy.com/https://github.com"
-        "https://github.moeyy.xyz/https://github.com"
-        "https://github.com"
-    )
+    echo -e "${GREEN}检测到代理: $http_proxy${NC}"
 fi
-
-# Git克隆函数，支持多个镜像重试
-git_clone_with_retry() {
-    local repo_path=$1
-    local target_dir=$2
-    local max_attempts=${3:-${#GITHUB_URLS[@]}}
-    
-    for url_base in "${GITHUB_URLS[@]}"; do
-        echo -e "${BLUE}  尝试: ${url_base}${NC}"
-        # 构建完整URL
-        if [[ $url_base == *"github.com" ]] && [[ $url_base != "https://github.com" ]]; then
-            # 镜像URL
-            full_url="$url_base/$repo_path"
-        else
-            # 直接URL
-            full_url="$url_base/$repo_path"
-        fi
-        
-        # 尝试克隆
-        if timeout 30 git clone --depth=1 "$full_url" "$target_dir" 2>/dev/null; then
-            echo -e "${GREEN}    成功！${NC}"
-            return 0
-        else
-            echo -e "${YELLOW}    失败，尝试下一个源...${NC}"
-        fi
-    done
-    
-    return 1
-}
 
 # 安装 ncurses (zsh 的依赖)
 install_ncurses() {
@@ -129,12 +89,8 @@ install_zsh_from_source() {
     ZSH_VERSION="5.9"
     echo "下载 zsh 源码..."
     
-    # 尝试多个源下载
-    for mirror in "" "https://mirror.ghproxy.com/" "https://ghproxy.com/"; do
-        if curl -L "${mirror}https://github.com/zsh-users/zsh/archive/refs/tags/zsh-${ZSH_VERSION}.tar.gz" -o zsh.tar.gz 2>/dev/null && [ -s zsh.tar.gz ]; then
-            break
-        fi
-    done
+    curl -L "https://github.com/zsh-users/zsh/archive/refs/tags/zsh-${ZSH_VERSION}.tar.gz" -o zsh.tar.gz || \
+    wget "https://github.com/zsh-users/zsh/archive/refs/tags/zsh-${ZSH_VERSION}.tar.gz" -O zsh.tar.gz
     
     if [ ! -f zsh.tar.gz ] || [ ! -s zsh.tar.gz ]; then
         echo -e "${RED}下载失败${NC}"
@@ -210,7 +166,7 @@ if [ ! -d "$HOME/.oh-my-zsh" ] || [ ! -f "$HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
     echo -e "${GREEN}安装 Oh My Zsh...${NC}"
     rm -rf ~/.oh-my-zsh
     
-    if git_clone_with_retry "ohmyzsh/ohmyzsh.git" ~/.oh-my-zsh; then
+    if git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git ~/.oh-my-zsh; then
         echo -e "${GREEN}Oh My Zsh 安装成功${NC}"
     else
         echo -e "${RED}Oh My Zsh 安装失败${NC}"
@@ -220,10 +176,11 @@ else
     echo -e "${GREEN}Oh My Zsh 已安装，跳过${NC}"
 fi
 
-# 创建插件目录
+# 创建必要目录
 mkdir -p ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins
+mkdir -p ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/themes
 
-# 插件验证函数 - 更宽松的验证
+# 插件验证函数
 validate_plugin() {
     local plugin_dir=$1
     local plugin_name=$(basename "$plugin_dir")
@@ -232,7 +189,7 @@ validate_plugin() {
         return 1
     fi
     
-    # 特定插件的验证
+    # 检查关键文件
     case "$plugin_name" in
         zsh-autosuggestions)
             [ -f "$plugin_dir/zsh-autosuggestions.plugin.zsh" ] || [ -f "$plugin_dir/zsh-autosuggestions.zsh" ]
@@ -247,55 +204,59 @@ validate_plugin() {
             [ -f "$plugin_dir/zsh-z.plugin.zsh" ] || [ -f "$plugin_dir/z.sh" ]
             ;;
         *)
-            # 检查是否有任何 .zsh 或 .plugin.zsh 文件
             ls "$plugin_dir"/*.zsh >/dev/null 2>&1 || ls "$plugin_dir"/*.plugin.zsh >/dev/null 2>&1
             ;;
     esac
 }
 
-# 强制安装插件函数
-force_install_plugin() {
+# 安装插件函数
+install_plugin() {
     local plugin_name=$1
-    local plugin_repo=$2
+    local plugin_url=$2
     local plugin_dir=$3
     
     echo -e "${YELLOW}安装 $plugin_name...${NC}"
     
-    # 先删除可能存在的目录
+    # 清理旧目录
     rm -rf "$plugin_dir"
     
-    # 使用重试函数安装
-    if git_clone_with_retry "$plugin_repo" "$plugin_dir"; then
+    # 克隆插件
+    if timeout 60 git clone --depth=1 "$plugin_url" "$plugin_dir" 2>&1 | while read line; do
+        echo -e "${BLUE}  $line${NC}"
+    done; then
         # 验证安装
         if validate_plugin "$plugin_dir"; then
             echo -e "${GREEN}✓ $plugin_name 安装成功${NC}"
             SUCCESS_PLUGINS+=("$plugin_name")
             return 0
         else
-            echo -e "${YELLOW}⚠ $plugin_name 安装了但验证失败，尝试修复...${NC}"
-            # 对于某些插件可能需要特殊处理
+            # 尝试修复特定插件
             if [ "$plugin_name" = "zsh-z" ] && [ -f "$plugin_dir/z.sh" ]; then
-                # 创建一个 plugin 文件
                 echo 'source ${0:A:h}/z.sh' > "$plugin_dir/zsh-z.plugin.zsh"
+                echo -e "${GREEN}✓ $plugin_name 修复成功${NC}"
                 SUCCESS_PLUGINS+=("$plugin_name")
                 return 0
             fi
+            echo -e "${YELLOW}⚠ $plugin_name 文件不完整${NC}"
         fi
+    else
+        echo -e "${RED}✗ $plugin_name 克隆失败${NC}"
     fi
     
-    echo -e "${RED}✗ $plugin_name 安装失败${NC}"
     FAILED_PLUGINS+=("$plugin_name")
     return 1
 }
 
 # 安装 Powerlevel10k 主题
-echo -e "${GREEN}检查 Powerlevel10k 主题...${NC}"
+echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN}安装 Powerlevel10k 主题...${NC}"
 P10K_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k"
-if [ ! -d "$P10K_DIR" ] || [ ! -f "$P10K_DIR/powerlevel10k.zsh-theme" ]; then
-    echo -e "${YELLOW}安装 Powerlevel10k...${NC}"
+
+if [ ! -f "$P10K_DIR/powerlevel10k.zsh-theme" ]; then
     rm -rf "$P10K_DIR"
-    
-    if git_clone_with_retry "romkatv/powerlevel10k.git" "$P10K_DIR"; then
+    if timeout 60 git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$P10K_DIR" 2>&1 | while read line; do
+        echo -e "${BLUE}  $line${NC}"
+    done; then
         if [ -f "$P10K_DIR/powerlevel10k.zsh-theme" ]; then
             echo -e "${GREEN}✓ Powerlevel10k 安装成功${NC}"
         else
@@ -310,55 +271,45 @@ fi
 
 # 安装所有插件
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}开始安装插件...${NC}"
+echo -e "${GREEN}安装插件...${NC}"
 echo -e "${GREEN}========================================${NC}"
 
-# 强制安装所有插件
-force_install_plugin "zsh-autosuggestions" \
-    "zsh-users/zsh-autosuggestions.git" \
-    "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions"
+# 定义插件列表
+declare -a PLUGINS=(
+    "zsh-autosuggestions|https://github.com/zsh-users/zsh-autosuggestions.git"
+    "zsh-syntax-highlighting|https://github.com/zsh-users/zsh-syntax-highlighting.git"
+    "zsh-completions|https://github.com/zsh-users/zsh-completions.git"
+    "zsh-z|https://github.com/agkozak/zsh-z.git"
+)
 
-force_install_plugin "zsh-syntax-highlighting" \
-    "zsh-users/zsh-syntax-highlighting.git" \
-    "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
-
-force_install_plugin "zsh-completions" \
-    "zsh-users/zsh-completions.git" \
-    "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-completions"
-
-force_install_plugin "zsh-z" \
-    "agkozak/zsh-z.git" \
-    "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-z"
+# 安装每个插件
+for plugin_info in "${PLUGINS[@]}"; do
+    IFS='|' read -r plugin_name plugin_url <<< "$plugin_info"
+    plugin_dir="${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/$plugin_name"
+    install_plugin "$plugin_name" "$plugin_url" "$plugin_dir"
+done
 
 # 下载 p10k 配置
+echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}配置 Powerlevel10k...${NC}"
 if [ ! -f ~/.p10k.zsh ]; then
-    P10K_URLS=(
-        "https://raw.githubusercontent.com/VocabVictor/myzsh/main/p10k.zsh"
-        "https://mirror.ghproxy.com/https://raw.githubusercontent.com/VocabVictor/myzsh/main/p10k.zsh"
-        "https://ghproxy.com/https://raw.githubusercontent.com/VocabVictor/myzsh/main/p10k.zsh"
-    )
-    
-    for url in "${P10K_URLS[@]}"; do
-        if curl -fsSL "$url" -o ~/.p10k.zsh.tmp 2>/dev/null && [ -s ~/.p10k.zsh.tmp ]; then
-            mv ~/.p10k.zsh.tmp ~/.p10k.zsh
-            echo -e "${GREEN}✓ P10k 配置下载成功${NC}"
-            break
-        fi
-    done
-    
-    if [ ! -f ~/.p10k.zsh ]; then
-        echo -e "${YELLOW}! P10k 配置下载失败，将使用默认配置${NC}"
+    if curl -fsSL --connect-timeout 10 --max-time 30 \
+        "https://raw.githubusercontent.com/VocabVictor/myzsh/main/p10k.zsh" \
+        -o ~/.p10k.zsh.tmp 2>/dev/null && [ -s ~/.p10k.zsh.tmp ]; then
+        mv ~/.p10k.zsh.tmp ~/.p10k.zsh
+        echo -e "${GREEN}✓ P10k 配置下载成功${NC}"
+    else
+        echo -e "${YELLOW}! P10k 配置下载失败，使用默认配置${NC}"
         rm -f ~/.p10k.zsh.tmp
     fi
 else
     echo -e "${GREEN}✓ P10k 配置已存在${NC}"
 fi
 
-# 创建 .zshrc - 只加载成功安装的插件
+# 创建 .zshrc
 echo -e "${GREEN}生成 .zshrc 配置...${NC}"
-cat > ~/.zshrc << 'ZSHRC_HEAD'
-# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
+cat > ~/.zshrc << 'EOF'
+# Enable Powerlevel10k instant prompt
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
@@ -367,13 +318,13 @@ fi
 export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
 export LD_LIBRARY_PATH="$HOME/.local/lib:$LD_LIBRARY_PATH"
 
-# Path to oh-my-zsh installation
+# Oh-my-zsh installation
 export ZSH="$HOME/.oh-my-zsh"
 
-# Set theme
+# Theme
 ZSH_THEME="powerlevel10k/powerlevel10k"
 
-# Base plugins
+# Plugins
 plugins=(
     git
     extract
@@ -382,15 +333,23 @@ plugins=(
     history-substring-search
 )
 
-ZSHRC_HEAD
-
-# 动态添加成功安装的插件
-for plugin in "${SUCCESS_PLUGINS[@]}"; do
-    echo "plugins+=($plugin)" >> ~/.zshrc
+# Add custom plugins if they exist and are valid
+for plugin in zsh-autosuggestions zsh-syntax-highlighting zsh-completions zsh-z; do
+    plugin_dir="$ZSH/custom/plugins/$plugin"
+    if [ -d "$plugin_dir" ]; then
+        # Check if plugin has necessary files
+        case "$plugin" in
+            zsh-completions)
+                [ -d "$plugin_dir/src" ] && plugins+=($plugin)
+                ;;
+            *)
+                if ls "$plugin_dir"/*.plugin.zsh >/dev/null 2>&1 || ls "$plugin_dir"/*.zsh >/dev/null 2>&1; then
+                    plugins+=($plugin)
+                fi
+                ;;
+        esac
+    fi
 done
-
-# 继续配置文件
-cat >> ~/.zshrc << 'ZSHRC_TAIL'
 
 # Load oh-my-zsh
 source $ZSH/oh-my-zsh.sh
@@ -400,7 +359,7 @@ export LANG=en_US.UTF-8
 export EDITOR='vim'
 export TZ='Asia/Shanghai'
 
-# History configuration
+# History
 HISTSIZE=100000
 SAVEHIST=100000
 HISTFILE=~/.zsh_history
@@ -412,7 +371,7 @@ setopt HIST_VERIFY
 setopt SHARE_HISTORY
 setopt HIST_FIND_NO_DUPS
 
-# Autosuggestions configuration (if installed)
+# Autosuggestions settings
 if [[ -d "$ZSH/custom/plugins/zsh-autosuggestions" ]]; then
   ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=244"
   ZSH_AUTOSUGGEST_STRATEGY=(history completion)
@@ -447,7 +406,7 @@ alias cls='clear'
 alias h='history'
 alias path='echo -e ${PATH//:/\\n}'
 
-# Useful functions
+# Functions
 mkcd() { mkdir -p "$1" && cd "$1"; }
 backup() { cp "$1" "$1.bak.$(date +%Y%m%d_%H%M%S)"; }
 
@@ -463,54 +422,57 @@ bindkey '^[[B' history-substring-search-down
 # Load p10k configuration
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
-# Load zsh-completions if installed
-if [[ -d "$ZSH/custom/plugins/zsh-completions" ]]; then
+# Load zsh-completions
+if [[ -d "$ZSH/custom/plugins/zsh-completions/src" ]]; then
   fpath+=${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions/src
 fi
-ZSHRC_TAIL
+EOF
 
 # 创建缓存目录
 mkdir -p ~/.cache
 
-# 最终验证
+# 最终验证和报告
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}安装报告：${NC}"
+echo -e "${GREEN}安装报告${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 # 基础组件
 echo -e "${BLUE}基础组件：${NC}"
 [ -d ~/.oh-my-zsh ] && echo -e "  ${GREEN}✓ Oh My Zsh${NC}" || echo -e "  ${RED}✗ Oh My Zsh${NC}"
-[ -d ~/.oh-my-zsh/custom/themes/powerlevel10k ] && echo -e "  ${GREEN}✓ Powerlevel10k${NC}" || echo -e "  ${RED}✗ Powerlevel10k${NC}"
-[ -f ~/.p10k.zsh ] && echo -e "  ${GREEN}✓ P10k 配置${NC}" || echo -e "  ${YELLOW}⚠ P10k 配置（使用默认）${NC}"
+[ -f ~/.oh-my-zsh/custom/themes/powerlevel10k/powerlevel10k.zsh-theme ] && echo -e "  ${GREEN}✓ Powerlevel10k${NC}" || echo -e "  ${RED}✗ Powerlevel10k${NC}"
+[ -f ~/.p10k.zsh ] && echo -e "  ${GREEN}✓ P10k 配置${NC}" || echo -e "  ${YELLOW}⚠ P10k 配置（默认）${NC}"
 
 # 插件状态
 echo -e "\n${BLUE}插件状态：${NC}"
-if [ ${#SUCCESS_PLUGINS[@]} -gt 0 ]; then
-    echo -e "${GREEN}成功安装的插件：${NC}"
-    for plugin in "${SUCCESS_PLUGINS[@]}"; do
+for plugin in zsh-autosuggestions zsh-syntax-highlighting zsh-completions zsh-z; do
+    plugin_dir="${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/$plugin"
+    if validate_plugin "$plugin_dir"; then
         echo -e "  ${GREEN}✓ $plugin${NC}"
-    done
-fi
-
-if [ ${#FAILED_PLUGINS[@]} -gt 0 ]; then
-    echo -e "${RED}安装失败的插件：${NC}"
-    for plugin in "${FAILED_PLUGINS[@]}"; do
+    else
         echo -e "  ${RED}✗ $plugin${NC}"
+    fi
+done
+
+# 实际插件目录
+echo -e "\n${BLUE}插件目录：${NC}"
+if [ -d ~/.oh-my-zsh/custom/plugins ]; then
+    for dir in ~/.oh-my-zsh/custom/plugins/*/; do
+        if [ -d "$dir" ]; then
+            plugin_name=$(basename "$dir")
+            file_count=$(find "$dir" -name "*.zsh" -o -name "*.plugin.zsh" 2>/dev/null | wc -l)
+            echo -e "  $plugin_name (${file_count} zsh文件)"
+        fi
     done
 fi
-
-# 实际检查插件目录
-echo -e "\n${BLUE}插件目录内容：${NC}"
-ls -la ~/.oh-my-zsh/custom/plugins/ 2>/dev/null | tail -n +4 | while read -r line; do
-    echo "  $line"
-done
 
 # Zsh 信息
 echo -e "\n${BLUE}Zsh 信息：${NC}"
 if [ -f "$HOME/.local/bin/zsh" ]; then
     echo -e "  路径: $HOME/.local/bin/zsh"
+    $HOME/.local/bin/zsh --version 2>/dev/null | head -1 | sed 's/^/  /'
 elif command -v zsh &> /dev/null; then
     echo -e "  路径: $(which zsh)"
+    zsh --version 2>/dev/null | head -1 | sed 's/^/  /'
 fi
 
 echo -e "${GREEN}========================================${NC}"
@@ -527,15 +489,13 @@ fi
 cleanup_temp_files
 
 echo -e "${GREEN}配置完成！${NC}"
-echo -e "${YELLOW}提示：${NC}"
-echo -e "1. 重新登录或运行: ${GREEN}exec \$HOME/.local/bin/zsh${NC}"
-echo -e "2. 如需重新配置主题，运行: ${GREEN}p10k configure${NC}"
-
-if [ ${#FAILED_PLUGINS[@]} -gt 0 ]; then
-    echo -e "3. 部分插件安装失败，但不影响基本使用"
-fi
+echo -e "${YELLOW}使用说明：${NC}"
+echo -e "  1. 启动 Zsh: ${GREEN}exec \$HOME/.local/bin/zsh${NC}"
+echo -e "  2. 配置主题: ${GREEN}p10k configure${NC}"
+echo -e "  3. 查看插件: ${GREEN}ls ~/.oh-my-zsh/custom/plugins/${NC}"
 
 # 询问是否立即切换
+echo ""
 read -p "是否现在切换到 zsh? (y/n): " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
